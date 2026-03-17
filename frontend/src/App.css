@@ -1,0 +1,138 @@
+/* =========================
+   Full Page Background
+========================= */
+
+body {
+  margin: 0;
+  padding: 0;
+
+  background-color: #141414;   /* dark navy background */
+
+  color: #e2e8f0;              /* soft white text */
+
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+
+
+/* =========================
+   Center Container
+========================= */
+
+.container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+
+/* =========================
+   Interview Card
+========================= */
+
+.card {
+
+  background: #141312;         /* professional dark card */
+
+  padding: 40px;
+
+  border-radius: 12px;
+
+  width: 600px;
+
+  box-shadow: 0px 10px 30px rgba(10, 11, 11, 0.6);
+
+  text-align: center;
+
+}
+
+
+
+/* =========================
+   Textarea
+========================= */
+
+textarea {
+
+  width: 100%;
+
+  height: 120px;
+
+  padding: 12px;
+
+  margin-top: 10px;
+
+  margin-bottom: 15px;
+
+  border-radius: 10px;
+
+  border: 1px solid #9a9898a2;
+
+  background: #212121;      /* dark input background */
+
+  color: #efe8e8;
+
+  font-size: 14px;
+
+}
+
+
+/* =========================
+   File Input
+========================= */
+
+input[type="file"] {
+
+  width: 100%;
+
+  padding: 10px;
+
+  background: #2d2d2e;
+
+  border-radius: 10px;
+
+  border: 1px solid #09090a;
+
+  color: #f3eded;
+
+  margin-bottom: 15px;
+
+}
+
+
+/* =========================
+   Buttons
+========================= */
+
+button {
+
+  padding: 12px 22px;
+
+  background: #f0e9e9;      /* professional blue */
+
+  color: rgb(15, 14, 14);
+
+  border: none;
+
+  border-radius: 8px;
+
+  cursor: pointer;
+
+  font-weight: bold;
+
+  transition: 0.3s;
+
+  justify-content: center;
+
+}
+
+
+/* Hover Effect */
+
+button:hover {
+
+  background: #e8e9ec;      /* darker blue */
+
+  transform: scale(1.05);
+
+}
