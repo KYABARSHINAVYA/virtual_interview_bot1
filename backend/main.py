@@ -3,8 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import requests
 import pdfplumber
 import docx
-import random
 
+# ----------------------------------------
+# App Setup
+# ----------------------------------------
 app = FastAPI()
 
 app.add_middleware(
@@ -16,213 +18,244 @@ app.add_middleware(
 )
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "llama3"
+MODEL_NAME = "phi3"
 
-TOTAL_TECH = 10
-TOTAL_HR = 5
-TOTAL_QUESTIONS = TOTAL_TECH + TOTAL_HR
+TOTAL_QUESTIONS = 15
+TECH_QUESTIONS = 10
 
-# -------------------------
+# ----------------------------------------
 # Interview State
-# -------------------------
+# ----------------------------------------
 interview_state = {
-    "count": 0,
+    "conversation": "",
+    "current_question": "",
+    "question_count": 0,
     "score": 0,
-    "jd": "",
-    "resume": "",
-    "asked_questions": []
+    "resume_text": ""
 }
 
-# -------------------------
-# Resume Extract
-# -------------------------
-def extract_text(file: UploadFile):
-    text = ""
+# ----------------------------------------
+# Ollama Call
+# ----------------------------------------
+def ask_ollama(prompt, temperature=0.4):
     try:
-        if file.filename.endswith(".pdf"):
-            with pdfplumber.open(file.file) as pdf:
-                for page in pdf.pages:
-                    text += page.extract_text() or ""
-        elif file.filename.endswith(".docx"):
-            doc = docx.Document(file.file)
-            for para in doc.paragraphs:
-                text += para.text + "\n"
-    except:
-        pass
-    return text[:2000]
-
-
-# -------------------------
-# Resume Summarization (NEW)
-# -------------------------
-def summarize_resume(resume_text):
-    prompt = f"""
-Summarize this resume into key skills, projects, and technologies in 5 lines:
-
-{resume_text}
-"""
-    return ask_ollama(prompt)
-
-
-# -------------------------
-# Ollama Call (OPTIMIZED)
-# -------------------------
-def ask_ollama(prompt):
-    try:
-        response = requests.post(
+        res = requests.post(
             OLLAMA_URL,
             json={
                 "model": MODEL_NAME,
                 "prompt": prompt,
                 "stream": False,
                 "options": {
-                    "temperature": 0.9,
-                    "top_p": 0.9,
-                    "repeat_penalty": 1.5
+                    "temperature": temperature,
+                    "top_p": 0.7,
+                    "repeat_penalty": 1.3
                 }
             },
-            timeout=30
+            timeout=15
         )
+        return res.json().get("response", "").strip()
+    except:
+        return "Error"
 
-        if response.status_code == 200:
-            return response.json().get("response", "").strip()
-        else:
-            return "Model Error"
+# ----------------------------------------
+# Resume Extraction
+# ----------------------------------------
+def extract_resume(file: UploadFile):
+    text = ""
 
-    except Exception as e:
-        return f"Connection Error: {str(e)}"
+    if file.filename.endswith(".pdf"):
+        with pdfplumber.open(file.file) as pdf:
+            for page in pdf.pages:
+                text += page.extract_text() or ""
 
+    elif file.filename.endswith(".docx"):
+        doc = docx.Document(file.file)
+        for p in doc.paragraphs:
+            text += p.text + "\n"
 
-# -------------------------
-# Generate Question (FIXED)
-# -------------------------
-def generate_question(question_type):
+    return text[:2500]
 
-    previous = "\n".join(interview_state["asked_questions"])
+# ----------------------------------------
+# Filter Bad Questions
+# ----------------------------------------
+def is_bad_question(q):
+    bad_words = [
+        "network", "osi", "tcp", "ip",
+        "define", "what is", "explain",
+        "theory", "difference between",
+        "describe", "advantages", "disadvantages"
+    ]
+
+    if any(word in q.lower() for word in bad_words):
+        return True
+
+    # Too long question check
+    if len(q.split()) > 20:
+        return True
+
+    # Multi-line question check
+    if "\n" in q:
+        return True
+
+    return False
+
+# ----------------------------------------
+# Generate Question (STRICT Resume Only)
+# ----------------------------------------
+def generate_question(q_type):
+
+    resume_data = interview_state["resume_text"]
+
+    if q_type == "technical":
+        rule = "Ask technical question from resume projects/skills."
+    else:
+        rule = "Ask HR question based on resume experience."
 
     prompt = f"""
-You are an expert interviewer.
+You are a strict interviewer.
 
-Generate ONE unique {question_type} interview question.
+Generate ONLY ONE SHORT QUESTION.
 
-Rules:
-- Do NOT repeat previous questions
-- Must be different from:
-{previous}
+RULES:
+- {rule}
+- MUST be based ONLY on resume content
+- Do NOT ask theoretical questions
+- Do NOT ask definitions
+- Do NOT ask networking questions
+- Maximum 15 to 20 words
+- Output must be a SINGLE LINE question
+- Output ONLY the question (no explanation)
 
-- Must be based on:
-Resume: {interview_state["resume"]}
-Job Description: {interview_state["jd"]}
-
-- Keep it short
-- Ask only question
+Resume:
+{resume_data}
 """
 
-    question = ask_ollama(prompt)
+    for _ in range(5):
+        question = ask_ollama(prompt)
 
-    # Hard duplicate check
-    if question in interview_state["asked_questions"] or len(question) < 10:
-        question = "Explain one challenging project you worked on."
+        if len(question) > 10 and not is_bad_question(question):
+            return question
 
-    interview_state["asked_questions"].append(question)
+    return "Explain your most important project mentioned in your resume."
 
-    return question
-
-
-# -------------------------
-# Start Interview
-# -------------------------
+# ----------------------------------------
+# START INTERVIEW
+# ----------------------------------------
 @app.post("/start")
 async def start_interview(
     job_description: str = Form(...),
     resume: UploadFile = File(...)
 ):
-    random.seed()
 
-    interview_state["count"] = 1
+    resume_text = extract_resume(resume)
+
+    interview_state["resume_text"] = resume_text
+    interview_state["conversation"] = ""
+    interview_state["question_count"] = 1
     interview_state["score"] = 0
-    interview_state["jd"] = job_description[:1000]
 
-    raw_resume = extract_text(resume)
-    interview_state["resume"] = summarize_resume(raw_resume)
+    # First Question strictly from resume projects
+    first_prompt = f"""
+You are a strict interviewer.
 
-    interview_state["asked_questions"] = []
+Ask ONLY ONE short question based ONLY on resume projects.
 
-    first_question = generate_question("technical")
+RULES:
+- Must be project based
+- Do NOT ask theory
+- Maximum 20 words
+- Output ONLY one line question
 
-    return {
-        "question": first_question,
-        "end": False
-    }
+Resume:
+{resume_text}
+"""
 
+    first_question = ask_ollama(first_prompt)
 
-# -------------------------
-# Submit Answer
-# -------------------------
+    if is_bad_question(first_question):
+        first_question = "Explain your most important project mentioned in your resume."
+
+    interview_state["current_question"] = first_question
+
+    return {"question": first_question}
+
+# ----------------------------------------
+# SUBMIT ANSWER
+# ----------------------------------------
 @app.post("/answer")
 async def submit_answer(answer: str = Form(...)):
 
-    # Evaluate Answer
+    current_q = interview_state["current_question"]
+
+    # Evaluation prompt
     eval_prompt = f"""
 You are a strict interviewer.
 
-Reply with ONLY:
+Reply ONLY:
 Correct
 OR
 Wrong
+
+Question:
+{current_q}
 
 Answer:
 {answer}
 """
 
-    result = ask_ollama(eval_prompt)
+    result = ask_ollama(eval_prompt, temperature=0)
 
     if "Correct" in result:
-        result = "Correct"
+        evaluation = "Correct"
         interview_state["score"] += 1
     else:
-        result = "Wrong"
+        evaluation = "Wrong"
 
-    interview_state["count"] += 1
+    # Save conversation
+    interview_state["conversation"] += f"""
+Question: {current_q}
+Answer: {answer}
+"""
 
-    # -------------------------
-    # End Interview
-    # -------------------------
-    if interview_state["count"] > TOTAL_QUESTIONS:
+    interview_state["question_count"] += 1
 
-        final_score = round(
-            (interview_state["score"] / TOTAL_QUESTIONS) * 10, 2
-        )
+    # END INTERVIEW
+    if interview_state["question_count"] > TOTAL_QUESTIONS:
 
+        total = TOTAL_QUESTIONS
+        score = interview_state["score"]
+
+        final_score = round((score / total) * 10, 2)
         percentage = round((final_score / 10) * 100, 2)
 
         feedback_prompt = f"""
-Candidate answered {interview_state["score"]} out of {TOTAL_QUESTIONS} correctly.
-Final Score: {final_score}
-Percentage: {percentage}%
+Candidate final score: {final_score}/10 ({percentage}%)
 
-Give professional feedback in 4 lines.
+Give 4 lines feedback.
+Focus on resume-based performance.
 """
 
-        final_feedback = ask_ollama(feedback_prompt)
+        feedback = ask_ollama(feedback_prompt)
 
         return {
             "end": True,
             "score": final_score,
             "percentage": percentage,
-            "feedback": final_feedback
+            "feedback": feedback
         }
 
-    # -------------------------
-    # Next Question Type
-    # -------------------------
-    if interview_state["count"] > TOTAL_TECH:
-        next_question = generate_question("HR")
+    # NEXT QUESTION TYPE
+    if interview_state["question_count"] <= TECH_QUESTIONS:
+        q_type = "technical"
     else:
-        next_question = generate_question("technical")
+        q_type = "HR"
+
+    next_q = generate_question(q_type)
+
+    interview_state["current_question"] = next_q
 
     return {
         "end": False,
-        "evaluation": result,
-        "question": next_question
+        "evaluation": evaluation,
+        "question": next_q
     }

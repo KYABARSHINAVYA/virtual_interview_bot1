@@ -1,138 +1,193 @@
-/* =========================
-   Full Page Background
-========================= */
-
 body {
   margin: 0;
   padding: 0;
-
-  background-color: #141414;   /* dark navy background */
-
-  color: #e2e8f0;              /* soft white text */
-
-  font-family: "Segoe UI", Arial, sans-serif;
-}
-
-
-/* =========================
-   Center Container
-========================= */
-
-.container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  font-family: Arial, sans-serif;
+  background: linear-gradient(to right, #141e30, #243b55);
   height: 100vh;
 }
 
+/* MAIN LAYOUT */
+.main-layout {
+  display: flex;
+  height: 100vh;
+  width: 100%;
+}
 
-/* =========================
-   Interview Card
-========================= */
+/* LEFT PANEL */
+.left-panel {
+  width: 30%;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  border-right: 2px solid rgba(255, 255, 255, 0.2);
+  color: white;
+}
 
-.card {
-
-  background: #141312;         /* professional dark card */
-
-  padding: 40px;
-
-  border-radius: 12px;
-
-  width: 600px;
-
-  box-shadow: 0px 10px 30px rgba(10, 11, 11, 0.6);
-
+.title {
   text-align: center;
-
+  margin-bottom: 20px;
+  color: #ffffff;
 }
 
-
-
-/* =========================
-   Textarea
-========================= */
-
-textarea {
-
-  width: 100%;
-
-  height: 120px;
-
-  padding: 12px;
-
-  margin-top: 10px;
-
-  margin-bottom: 15px;
-
-  border-radius: 10px;
-
-  border: 1px solid #9a9898a2;
-
-  background: #212121;      /* dark input background */
-
-  color: #efe8e8;
-
-  font-size: 14px;
-
-}
-
-
-/* =========================
-   File Input
-========================= */
-
-input[type="file"] {
-
-  width: 100%;
-
-  padding: 10px;
-
-  background: #2d2d2e;
-
-  border-radius: 10px;
-
-  border: 1px solid #09090a;
-
-  color: #f3eded;
-
-  margin-bottom: 15px;
-
-}
-
-
-/* =========================
-   Buttons
-========================= */
-
-button {
-
-  padding: 12px 22px;
-
-  background: #f0e9e9;      /* professional blue */
-
-  color: rgb(15, 14, 14);
-
-  border: none;
-
-  border-radius: 8px;
-
-  cursor: pointer;
-
+.label {
   font-weight: bold;
-
-  transition: 0.3s;
-
-  justify-content: center;
-
+  margin-top: 12px;
+  display: block;
+  color: #f1f1f1;
 }
 
+/* INPUTS */
+.input-box {
+  width: 100%;
+  height: 120px;
+  padding: 10px;
+  margin-top: 6px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  outline: none;
+}
 
-/* Hover Effect */
+.input-box::placeholder {
+  color: #dcdcdc;
+}
 
-button:hover {
+.file-input {
+  width: 100%;
+  margin-top: 8px;
+  color: white;
+}
 
-  background: #e8e9ec;      /* darker blue */
+/* BUTTONS */
+.btn {
+  width: 100%;
+  padding: 12px;
+  margin-top: 15px;
+  border: none;
+  cursor: pointer;
+  font-weight: bold;
+  border-radius: 8px;
+  transition: 0.3s;
+}
 
-  transform: scale(1.05);
+.start-btn {
+  background: #00c6ff;
+  color: black;
+}
 
+.start-btn:hover {
+  background: #00a6d6;
+}
+
+/* LOADING TEXT */
+.loading-text {
+  text-align: center;
+  margin-top: 10px;
+  color: yellow;
+}
+
+/* RIGHT PANEL */
+.right-panel {
+  width: 70%;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  color: white;
+}
+
+/* CHAT BOX */
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+}
+
+.chat-box {
+  flex: 1;
+  overflow-y: auto;
+  padding: 15px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(8px);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+/* CHAT MESSAGE */
+.chat-message {
+  max-width: 70%;
+  padding: 10px 15px;
+  border-radius: 12px;
+  margin-bottom: 10px;
+  word-wrap: break-word;
+  font-size: 15px;
+}
+
+/* BOT MESSAGE */
+.bot-message {
+  background: rgba(255, 255, 255, 0.2);
+  align-self: flex-start;
+  color: white;
+}
+
+/* USER MESSAGE */
+.user-message {
+  background: #00c6ff;
+  color: black;
+  align-self: flex-end;
+  font-weight: bold;
+}
+
+/* INPUT AREA */
+.chat-input-area {
+  margin-top: 20px;
+  width: 100%;
+  padding-right: 140px;
+}
+
+/* ENLARGED TEXTBOX */
+.answer-box {
+  width: 100%;
+  height: 110px;
+  padding: 15px;
+  border-radius: 12px;
+  border: none;
+  resize: none;
+  outline: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  font-size: 16px;
+}
+
+.answer-box::placeholder {
+  color: #dcdcdc;
+}
+
+/* SEND BUTTON MORE BOTTOM RIGHT */
+.send-btn {
+  position: absolute;
+  bottom: 10px;
+  right: 20px;
+  width: 110px;
+  height: 65px;
+  border-radius: 12px;
+  background: #00ff87;
+  color: black;
+  font-weight: bold;
+  cursor: pointer;
+  transition: 0.3s;
+}
+
+.send-btn:hover {
+  background: #00d96f;
+}
+
+/* FINAL RESULT */
+.final-result {
+  padding: 20px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  border: 2px solid rgba(255, 255, 255, 0.2);
 }
