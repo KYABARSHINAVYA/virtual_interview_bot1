@@ -63,7 +63,9 @@ Only the question
 # ----------------------------------------
 interview_state = {
     "started": False,
-    "conversation": "",
+    "jd_text": "",
+    "resume_text": "",
+    "history": [], # list of {"role": "interviewer/candidate", "content": "..."}
     "current_question": "",
     "question_count": 0,
     "score": 0,
@@ -132,41 +134,38 @@ def is_duplicate(new_question):
 # Generate Next Question (🔥 UPDATED)
 # ----------------------------------------
 def generate_next_question():
-
-    question_type = "Technical" if interview_state["question_count"] < TECH_QUESTIONS else "HR"
-
-    prev_questions = "\n".join(interview_state["asked_questions"])
+    phase = "TECHNICAL" if interview_state["question_count"] < TECH_QUESTIONS else "BEHAVIORAL"
+    
+    # Context-Aware Expert Prompt
+    history_str = "\n".join([f"{m['role']}: {m['content']}" for m in interview_state["history"][-4:]])
+    asked_str = ", ".join(interview_state["asked_questions"])
 
     prompt = f"""
-{interview_state["conversation"]}
+[SYSTEM: STAFF ENGINEER INTERVIEW PROTOCOL]
+You are a Staff Software Engineer at a Tier-1 tech company. 
 
-Previously Asked Questions:
-{prev_questions}
+[CONTEXT]
+JOB DESCRIPTION: {interview_state["jd_text"]}
+CANDIDATE RESUME: {interview_state["resume_text"]}
 
-Now ask Question {interview_state["question_count"] + 1} ({question_type})
+[INTERVIEW STATE]
+PHASE: {phase}
+PREVIOUSLY ASKED: {asked_str}
+RECENT DIALOGUE:
+{history_str}
 
-STRICT RULES:
-- Ask ONLY ONE question
-- NO generic questions
-- Focus on implementation / logic / architecture
-- Ask HOW or WHY
-- Use resume project details
-- Max 15 words
-- Do NOT repeat
+[GOAL]
+Generate Question #{interview_state["question_count"] + 1}.
 
-GOOD EXAMPLES:
-- How did you implement REST APIs in your project?
-- Which sorting algorithm did you use and why?
-- How does your emotion detection model work internally?
-- How did you preprocess your dataset?
+[STRICT INSTRUCTIONS]
+1. BRIDGE THE GAP: Identify a critical skill in the JD. Find a project in the RESUME. Ask a deep "HOW" or "WHY" question about the implementation of that skill within that specifically cited project.
+2. DRILL DOWN: If the candidate's last answer was strong, ask a deeper follow-up on the SAME topic. If they struggled, pivot to a new skill from the JD.
+3. NO GENERICS: Never ask "Tell me about..." or "What was your role...". Ask about bottlenecks, trade-offs, edge cases, or internal mechanics.
+4. BE CONCISE: Max 15 words. ONLY the question in output.
+5. NO REPETITION: Do not repeat concepts already discussed.
 
-BAD EXAMPLES:
-- Explain your project
-- What is your role
-- Describe your experience
-
-OUTPUT:
-Only the question
+[OUTPUT]
+Only the question text.
 """
 
     for _ in range(8):
@@ -190,32 +189,22 @@ async def start_interview(
 ):
     resume_text = extract_resume_text(resume)
 
-    interview_state["conversation"] = (
-        SYSTEM_PROMPT +
-        "\n\nJob Description:\n" + job_description +
-        "\n\nResume:\n" + resume_text
-    )
-
     interview_state["started"] = True
+    interview_state["jd_text"] = job_description
+    interview_state["resume_text"] = resume_text
+    interview_state["history"] = []
     interview_state["score"] = 0
     interview_state["question_count"] = 0
     interview_state["asked_questions"] = []
 
-    # 🔥 Better First Question Prompt
+    # Better First Question Prompt
     first_prompt = f"""
-{interview_state["conversation"]}
+[SYSTEM: STAFF ENGINEER INTERVIEW PROTOCOL]
+JOB: {job_description}
+RESUME: {resume_text}
 
-Ask Question 1 (Technical)
-
-STRICT RULES:
-- Ask deep technical question from project
-- NO generic questions
-- Focus on implementation (API, ML, logic)
-- Ask HOW or WHY
-- Max 15 words
-
-OUTPUT:
-Only the question
+Ask Question 1 (TECHNICAL). Identify the most complex project on the resume and ask a specific, deep implementation question (HOW/WHY) that demonstrates a core skill from the JD.
+Max 15 words. ONLY the question.
 """
 
     first_question = ask_ollama(first_prompt, temperature=0.5)
@@ -271,29 +260,33 @@ Answer:
     if evaluation == "Correct":
         interview_state["score"] += 1
 
-    # Save conversation
-    interview_state["conversation"] += (
-        f"\nInterviewer: {current_q}\nCandidate: {answer}\n"
-    )
+    # Save history
+    interview_state["history"].append({"role": "interviewer", "content": current_q})
+    interview_state["history"].append({"role": "candidate", "content": answer})
+    interview_state["question_count"] += 1
 
     # End Interview
     if interview_state["question_count"] >= TOTAL_QUESTIONS:
         interview_state["started"] = False
-
-        total = TOTAL_QUESTIONS
         score = interview_state["score"]
-        percentage = round((score / total) * 100, 2)
+        percentage = round((score / TOTAL_QUESTIONS) * 100, 2)
 
+        history_str = "\n".join([f"{m['role']}: {m['content']}" for m in interview_state["history"]])
+        
         final_prompt = f"""
-Provide a concise 4-5 line professional interview feedback.
+[SYSTEM: STAFF ENGINEER EVALUATOR]
+Provide a detailed, high-level professional assessment (4-5 lines) of the candidate's performance.
 
-Score: {score}/{total}
+[STATS]
+SCORE: {score}/{TOTAL_QUESTIONS}
 
-Conversation:
-{interview_state["conversation"]}
+[FULL TRANSCRIPT]
+{history_str}
+
+[GOAL]
+Summarize their technical depth, communication clarity, and overall fit for a Staff/Senior role.
 """
-
-        feedback = ask_ollama(final_prompt, temperature=0.4)
+        feedback = ask_ollama(final_prompt, temperature=0.7)
 
         return {
             "end": True,
@@ -307,10 +300,9 @@ Conversation:
     next_question = generate_next_question()
     
     if next_question == "ERROR_OLLAMA_OFFLINE":
-        return {"end": True, "message": "Ollama went offline during the interview."}
+        return {"end": True, "message": "Ollama went offline."}
 
     interview_state["current_question"] = next_question
-    interview_state["question_count"] += 1
 
     return {
         "end": False,
