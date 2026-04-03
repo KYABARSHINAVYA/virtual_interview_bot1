@@ -16,42 +16,72 @@ function App() {
   const [processingMessage, setProcessingMessage] = useState("");
 
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+
+  const [helperText, setHelperText] = useState("");
 
   const recognitionRef = useRef(null);
+  const hasSpokenRef = useRef(false);
 
-  // -----------------------------------
   // 🎤 Speech Recognition
-  // -----------------------------------
   useEffect(() => {
     const SpeechRecognition =
       window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.lang = "en-US";
-
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setAnswer(transcript);
-      };
-
-      recognitionRef.current = recognition;
+    if (!SpeechRecognition) {
+      alert("❌ Use Google Chrome for voice feature");
+      return;
     }
+
+    const recognition = new SpeechRecognition();
+
+    recognition.lang = "en-US";
+    recognition.continuous = false;
+    recognition.interimResults = true;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event) => {
+      let transcript = "";
+
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+
+      setAnswer(transcript);
+    };
+
+    recognition.onerror = () => {
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current = recognition;
   }, []);
 
-  // -----------------------------------
-  // 🔊 Speak (with stop previous)
-  // -----------------------------------
+  // 🔊 Speak ONLY ONCE + show helper text
   const speak = (text) => {
-    window.speechSynthesis.cancel(); // stop previous
+    if (hasSpokenRef.current) return;
+
+    window.speechSynthesis.cancel();
+
     const speech = new SpeechSynthesisUtterance(text);
-    speech.rate = 1;
+
+    speech.onend = () => {
+      setHelperText("👉 Please answer the above question");
+    };
+
     window.speechSynthesis.speak(speech);
+
+    hasSpokenRef.current = true;
   };
 
-  // -----------------------------------
-  // Start Interview
-  // -----------------------------------
+  // 🚀 Start Interview
   const startInterview = async () => {
     if (!jd || !resume) {
       alert("Enter JD and upload resume");
@@ -62,29 +92,30 @@ function App() {
     formData.append("job_description", jd);
     formData.append("resume", resume);
 
-    const res = await axios.post("http://localhost:5000/start", formData);
+    const res = await axios.post("http://localhost:8000/start", formData);
 
     setStarted(true);
+    setEnded(false);
+
     setChatHistory([
       { sender: "bot", message: res.data.question }
     ]);
 
-    // 🔊 Speak first question
+    hasSpokenRef.current = false;
+    setHelperText("");
+
     speak(res.data.question);
   };
 
-  // -----------------------------------
   // 🎤 Start Listening
-  // -----------------------------------
   const startListening = () => {
-    if (recognitionRef.current && !isProcessing) {
-      recognitionRef.current.start();
-    }
+    if (!recognitionRef.current || isListening) return;
+
+    setAnswer("");
+    recognitionRef.current.start();
   };
 
-  // -----------------------------------
-  // Submit Answer (WAIT FLOW)
-  // -----------------------------------
+  // 📤 Submit Answer
   const submitAnswer = async () => {
     if (!answer.trim()) {
       alert("Enter answer");
@@ -92,13 +123,8 @@ function App() {
     }
 
     setIsProcessing(true);
+    recognitionRef.current?.stop();
 
-    // Stop mic
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-    }
-
-    // Add user answer
     setChatHistory((prev) => [
       ...prev,
       { sender: "user", message: answer },
@@ -106,6 +132,7 @@ function App() {
 
     const userAnswer = answer;
     setAnswer("");
+    setHelperText("");
 
     setProcessingMessage("⏳ Evaluating your answer...");
 
@@ -113,7 +140,7 @@ function App() {
     formData.append("answer", userAnswer);
 
     try {
-      const res = await axios.post("http://localhost:5000/answer", formData);
+      const res = await axios.post("http://localhost:8000/answer", formData);
 
       setProcessingMessage("");
 
@@ -125,13 +152,11 @@ function App() {
         return;
       }
 
-      // Show evaluation first
       setChatHistory((prev) => [
         ...prev,
         { sender: "eval", message: res.data.evaluation },
       ]);
 
-      // Wait before next question
       setProcessingMessage("🤖 Preparing next question...");
 
       setTimeout(() => {
@@ -142,7 +167,10 @@ function App() {
           { sender: "bot", message: res.data.question },
         ]);
 
-        // 🔊 Speak AFTER everything
+        // 🔥 Reset speech control
+        hasSpokenRef.current = false;
+        setHelperText("");
+
         speak(res.data.question);
 
         setIsProcessing(false);
@@ -162,14 +190,13 @@ function App() {
       <div className="left-panel">
         <h2 className="title">🎤 AI Voice Interview</h2>
 
-        <label className="label">Job Description</label>
         <textarea
           className="input-box"
+          placeholder="Paste Job Description..."
           value={jd}
           onChange={(e) => setJd(e.target.value)}
         />
 
-        <label className="label">Upload Resume</label>
         <input
           type="file"
           className="file-input"
@@ -185,7 +212,6 @@ function App() {
       <div className="right-panel">
         <div className="chat-container">
 
-          {/* CHAT */}
           <div className="chat-box">
 
             {!started && !ended && (
@@ -211,6 +237,13 @@ function App() {
               </div>
             ))}
 
+            {/* ✅ HELPER TEXT AFTER SPEECH */}
+            {helperText && (
+              <div className="chat-message bot-message">
+                {helperText}
+              </div>
+            )}
+
             {processingMessage && (
               <div className="chat-message bot-message">
                 {processingMessage}
@@ -218,21 +251,23 @@ function App() {
             )}
           </div>
 
-          {/* INPUT AREA */}
+          {/* INPUT */}
           {started && !ended && (
             <div className="chat-input-area">
 
-              <p style={{ color: "#ccc" }}>
-                🎤 Speak or type your answer:
-              </p>
-
               <textarea
                 className="answer-box"
+                placeholder="Type or speak your answer..."
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
               />
 
-              {/* SEND */}
+              {isListening && (
+                <p style={{ color: "yellow" }}>
+                  🎤 Listening...
+                </p>
+              )}
+
               <button
                 className="send-btn"
                 onClick={submitAnswer}
@@ -241,14 +276,13 @@ function App() {
                 Send ➤
               </button>
 
-              {/* MIC */}
               <button
                 className="send-btn"
                 style={{ right: "140px", background: "#ffc107" }}
                 onClick={startListening}
-                disabled={isProcessing}
+                disabled={isProcessing || isListening}
               >
-                🎤 Speak
+                {isListening ? "🎤 Listening..." : "🎤 Speak"}
               </button>
             </div>
           )}
