@@ -92,8 +92,10 @@ def ask_ollama(prompt, temperature=0.6):
         response.raise_for_status()
         return response.json().get("response", "").strip()
 
+    except requests.exceptions.ConnectionError:
+        return "ERROR_OLLAMA_OFFLINE"
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"ERROR_GENERIC: {str(e)}"
 
 # ----------------------------------------
 # Resume Extraction
@@ -218,7 +220,13 @@ Only the question
 
     first_question = ask_ollama(first_prompt, temperature=0.5)
 
-    if is_duplicate(first_question) or len(first_question.split()) > 18:
+    if first_question == "ERROR_OLLAMA_OFFLINE":
+        return {"question": "Ollama is offline. Please start Ollama locally.", "end": True, "error": True}
+    
+    if first_question.startswith("ERROR_GENERIC"):
+        return {"question": f"An error occurred: {first_question}", "end": True, "error": True}
+
+    if is_duplicate(first_question) or len(first_question.split()) > 20:
         first_question = "How did you design and implement your main project?"
 
     interview_state["current_question"] = first_question
@@ -297,6 +305,10 @@ Conversation:
 
     # Next Question
     next_question = generate_next_question()
+    
+    if next_question == "ERROR_OLLAMA_OFFLINE":
+        return {"end": True, "message": "Ollama went offline during the interview."}
+
     interview_state["current_question"] = next_question
     interview_state["question_count"] += 1
 
